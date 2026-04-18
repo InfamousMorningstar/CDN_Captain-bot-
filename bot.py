@@ -99,7 +99,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 CDN_WEBSITE       = "https://cdndayz.com"
 BOT_NAME          = "CDN_Captain"
 
-CURRENT_VERSION   = "v1.1.9"
+CURRENT_VERSION   = "v1.2.0"
 GITHUB_RELEASES_API = "https://api.github.com/repos/InfamousMorningstar/CDN_Captain-bot/releases/latest"
 GITHUB_RELEASES_URL = "https://github.com/InfamousMorningstar/CDN_Captain-bot/releases/latest"
 PORTFOLIO_URL     = "https://portfolio.ahmxd.net"
@@ -1099,7 +1099,7 @@ async def evaluate_and_answer(
     else:
         channel_list = "  (unavailable — not in a guild)"
 
- — an AI assistant for the CDNDayz DayZ Discord server. You answer questions ONLY from your provided sources. You never invent, infer, or guess any fact that is not explicitly stated in those sources.
+    system_prompt = f"""You are {BOT_NAME} — an AI assistant for the CDNDayz DayZ Discord server. You answer questions ONLY from your provided sources. You never invent, infer, or guess any fact that is not explicitly stated in those sources.
 
 ━━ CRITICAL — YOU ARE INSIDE THE DISCORD SERVER ━━
 • Every user messaging you is ALREADY in this Discord server
