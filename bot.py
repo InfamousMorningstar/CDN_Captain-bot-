@@ -99,7 +99,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 CDN_WEBSITE       = "https://cdndayz.com"
 BOT_NAME          = "CDN_Captain"
 
-CURRENT_VERSION   = "v1.1.8"
+CURRENT_VERSION   = "v1.1.9"
 GITHUB_RELEASES_API = "https://api.github.com/repos/InfamousMorningstar/CDN_Captain-bot/releases/latest"
 GITHUB_RELEASES_URL = "https://github.com/InfamousMorningstar/CDN_Captain-bot/releases/latest"
 PORTFOLIO_URL     = "https://portfolio.ahmxd.net"
@@ -1074,7 +1074,32 @@ async def evaluate_and_answer(
 
     site_index = build_site_index()
 
-    system_prompt = f"""You are {BOT_NAME} — an AI assistant for the CDNDayz DayZ Discord server. You answer questions ONLY from your provided sources. You never invent, infer, or guess any fact that is not explicitly stated in those sources.
+    # Build a live list of all text channels in the guild for the system prompt
+    if message.guild:
+        channel_list_lines = []
+        for cat in sorted(message.guild.categories, key=lambda c: c.position):
+            visible = [
+                ch for ch in cat.channels
+                if isinstance(ch, discord.TextChannel)
+            ]
+            if visible:
+                channel_list_lines.append(f"  [{cat.name}]")
+                for ch in sorted(visible, key=lambda c: c.position):
+                    channel_list_lines.append(f"    <#{ch.id}> #{ch.name}")
+        # Channels not in any category
+        uncategorised = [
+            ch for ch in message.guild.channels
+            if isinstance(ch, discord.TextChannel) and ch.category is None
+        ]
+        if uncategorised:
+            channel_list_lines.append("  [No Category]")
+            for ch in sorted(uncategorised, key=lambda c: c.position):
+                channel_list_lines.append(f"    <#{ch.id}> #{ch.name}")
+        channel_list = "\n".join(channel_list_lines) if channel_list_lines else "  (unavailable)"
+    else:
+        channel_list = "  (unavailable — not in a guild)"
+
+ — an AI assistant for the CDNDayz DayZ Discord server. You answer questions ONLY from your provided sources. You never invent, infer, or guess any fact that is not explicitly stated in those sources.
 
 ━━ CRITICAL — YOU ARE INSIDE THE DISCORD SERVER ━━
 • Every user messaging you is ALREADY in this Discord server
@@ -1082,10 +1107,9 @@ async def evaluate_and_answer(
 • You are active in the #{channel_name} channel right now
 
 ━━ KNOWN DISCORD CHANNELS — ONLY USE THESE ━━
-The ONLY channels you are permitted to reference are:
-  • <#{REFERENCE_CHANNEL_ID}> — server rules and info
-  • <#{TICKET_CHANNEL_ID}> — open a support ticket (the ONLY ticket channel)
-NEVER mention, guess, or invent any other channel name or ID. If a channel is not in this list, it does not exist for you. Do NOT reference channels by name (e.g. "discord-rules", "general") — only use the <#ID> format above.
+These are ALL the real channels in this server. You may reference any of them using <#ID> format.
+NEVER invent a channel name or ID that is not in this list.
+{channel_list}
 
 ━━ YOUR KNOWLEDGE SOURCES ━━
 
@@ -1117,8 +1141,8 @@ These rules override everything else. Violating any of them is a critical failur
   2. NEVER infer, extrapolate, or "fill in" information that isn't written in your sources.
      "It's probably..." / "Typically in DayZ..." / "Most servers require..." = hallucination. Return {NO_ANSWER}.
 
-  3. NEVER reference a Discord channel by name or guess its ID. Use ONLY the <#ID> mentions listed
-     in the KNOWN DISCORD CHANNELS section above — nothing else.
+  3. NEVER reference a Discord channel by guessing a name or ID. Use ONLY <#ID> mentions for
+     channels that appear in the KNOWN DISCORD CHANNELS list above — nothing else.
 
   4. NEVER state a rule, price, distance, date, IP, requirement, or any server-specific fact unless
      it is explicitly written in your sources. If it feels right but isn't sourced, it is wrong.
