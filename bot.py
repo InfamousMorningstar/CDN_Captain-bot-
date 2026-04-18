@@ -99,7 +99,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 CDN_WEBSITE       = "https://cdndayz.com"
 BOT_NAME          = "CDN_Captain"
 
-CURRENT_VERSION   = "v1.1.4"
+CURRENT_VERSION   = "v1.1.5"
 GITHUB_RELEASES_API = "https://api.github.com/repos/InfamousMorningstar/CDN_Captain-bot/releases/latest"
 GITHUB_RELEASES_URL = "https://github.com/InfamousMorningstar/CDN_Captain-bot/releases/latest"
 PORTFOLIO_URL     = "https://portfolio.ahmxd.net"
@@ -1772,9 +1772,30 @@ async def on_message(message: discord.Message):
 
 
 # ─────────────────────────────────────────────
+#  Command permission check
+# ─────────────────────────────────────────────
+def _is_admin(ctx: commands.Context) -> bool:
+    """Allow owner (SIDEKICK_USER_ID) or any Discord administrator."""
+    if ctx.author.id == SIDEKICK_USER_ID:
+        return True
+    if isinstance(ctx.author, discord.Member):
+        return ctx.author.guild_permissions.administrator
+    return False
+
+
+@bot.event
+async def on_command_error(ctx: commands.Context, error: commands.CommandError):
+    """Silently ignore check failures and unknown commands."""
+    if isinstance(error, (commands.CheckFailure, commands.CommandNotFound)):
+        return
+    raise error
+
+
+# ─────────────────────────────────────────────
 #  Commands
 # ─────────────────────────────────────────────
 @bot.command(name="help")
+@commands.check(_is_admin)
 async def cdn_help(ctx: commands.Context):
     embed = discord.Embed(
         title=f"👋  {BOT_NAME}",
@@ -1813,6 +1834,7 @@ async def cdn_help(ctx: commands.Context):
 
 
 @bot.command(name="ask")
+@commands.check(_is_admin)
 async def cdn_ask(ctx: commands.Context, *, question: str):
     """Force an answer, bypassing all filters."""
     ref_content     = await fetch_reference_channel()
@@ -1833,6 +1855,7 @@ async def cdn_ask(ctx: commands.Context, *, question: str):
 
 
 @bot.command(name="crawl")
+@commands.check(_is_admin)
 async def cdn_crawl(ctx: commands.Context):
     """Force a fresh re-crawl of cdndayz.com."""
     msg = await ctx.send("🔍 Re-crawling cdndayz.com (rendering JavaScript) — this may take a moment...")
@@ -1843,6 +1866,7 @@ async def cdn_crawl(ctx: commands.Context):
 
 
 @bot.command(name="ping")
+@commands.check(_is_admin)
 async def cdn_ping(ctx: commands.Context):
     """Health check — latency, uptime, crawl age, DB stats."""
     import os, sys
@@ -1900,6 +1924,7 @@ async def cdn_ping(ctx: commands.Context):
 
 
 @bot.command(name="history")
+@commands.check(_is_admin)
 async def cdn_history(ctx: commands.Context):
     """Show the last 10 answers the bot gave in this channel."""
     records = await db_recent_history(ctx.channel.id, limit=10)
@@ -1922,6 +1947,7 @@ async def cdn_history(ctx: commands.Context):
 
 
 @bot.command(name="status")
+@commands.check(_is_admin)
 async def cdn_status(ctx: commands.Context):
     """Show current bot status and knowledge base stats."""
     now = time.time()
