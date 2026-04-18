@@ -433,26 +433,38 @@ class InstallerApp:
             self._log("✅ Chromium ready")
 
     def _kill_existing(self, install_dir: str) -> None:
-        """Kill a running watchdog using its PID file, if one exists."""
+        """Kill any running CDN_Captain instance — by PID file and by window title."""
+        # 1. Kill via watchdog.pid if present
         pid_file = os.path.join(install_dir, "watchdog.pid")
-        if not os.path.exists(pid_file):
-            return
-        try:
-            with open(pid_file, "r") as f:
-                pid = int(f.read().strip())
-            subprocess.run(
-                ["taskkill", "/PID", str(pid), "/T", "/F"],
-                capture_output=True,
-            )
-            self._log(f"⏹  Stopped existing bot (PID {pid})")
-            # Give the process a moment to fully exit
-            import time; time.sleep(1)
-        except Exception:
-            pass
-        try:
-            os.remove(pid_file)
-        except OSError:
-            pass
+        if os.path.exists(pid_file):
+            try:
+                with open(pid_file, "r") as f:
+                    pid = int(f.read().strip())
+                subprocess.run(
+                    ["taskkill", "/PID", str(pid), "/T", "/F"],
+                    capture_output=True,
+                )
+                self._log(f"⏹  Stopped existing bot (PID {pid})")
+            except Exception:
+                pass
+            try:
+                os.remove(pid_file)
+            except OSError:
+                pass
+
+        # 2. Also kill by window title — catches cases where PID file is stale or missing
+        subprocess.run(
+            ["taskkill", "/FI", "WINDOWTITLE eq CDN_Captain", "/T", "/F"],
+            capture_output=True,
+        )
+        # Kill any orphaned python processes running watchdog.py from install_dir
+        subprocess.run(
+            ["wmic", "process", "where",
+             f'CommandLine like "%{install_dir}%watchdog.py%"',
+             "call", "terminate"],
+            capture_output=True,
+        )
+        import time; time.sleep(1)
 
     def _launch(self, python: str, install_dir: str):
         self._status("Launching bot...")
