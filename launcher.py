@@ -74,7 +74,12 @@ def get_existing_install() -> str | None:
 
 # ── Python detection ───────────────────────────────────────────────────────────
 def find_python() -> str | None:
-    for cmd in [sys.executable, "python", "python3", "py"]:
+    # Skip sys.executable when running from a PyInstaller bundle — it points back
+    # to the installer .exe, not a real Python interpreter.
+    candidates = ["python", "python3", "py"]
+    if not getattr(sys, "frozen", False):
+        candidates.insert(0, sys.executable)
+    for cmd in candidates:
         try:
             r = subprocess.run([cmd, "--version"], capture_output=True, text=True, timeout=5)
             if r.returncode == 0 and "Python 3." in r.stdout:
@@ -419,9 +424,11 @@ class InstallerApp:
     def _launch(self, python: str, install_dir: str):
         self._status("Launching bot...")
         watchdog = os.path.join(install_dir, "watchdog.py")
-        # Open a visible terminal window so the user can see the bot running
+        # cmd /k requires the entire command wrapped in an extra pair of quotes
+        # when the program path or script path contains spaces.
+        # Syntax: start "title" cmd /k ""<exe>" "<script>""
         subprocess.Popen(
-            f'start "CDN_Captain" cmd /k "{python}" "{watchdog}"',
+            f'start "CDN_Captain" cmd /k ""{python}" "{watchdog}""',
             shell=True, cwd=install_dir,
         )
         self._log("🚀 CDN_Captain is running!")
@@ -432,7 +439,8 @@ class InstallerApp:
             self._progress.stop()
             self._btn.config(state="normal", text="✅  Running",
                              bg=GREEN, fg="#1e1e2e", command=lambda: None)
-            self._status("Bot is running!")
+            self._status("Bot is running — closing in 3 seconds...")
+            self.root.after(3000, self.root.destroy)
         self.root.after(0, _apply)
 
     def _done_err(self, msg: str):
