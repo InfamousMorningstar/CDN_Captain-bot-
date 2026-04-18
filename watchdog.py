@@ -51,16 +51,31 @@ def log(msg: str) -> None:
 # ─────────────────────────────────────────────
 #  Auto-updater
 # ─────────────────────────────────────────────
+def _read_github_token() -> str:
+    """Read GITHUB_TOKEN from the .env file in BASE_DIR, if present."""
+    env_path = os.path.join(BASE_DIR, ".env")
+    try:
+        with open(env_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line.startswith("GITHUB_TOKEN="):
+                    return line.split("=", 1)[1].strip()
+    except OSError:
+        pass
+    return ""
+
+
 def _fetch_latest_release() -> dict | None:
     """Hit the GitHub Releases API and return the JSON payload, or None on failure."""
     try:
-        req = urllib.request.Request(
-            GITHUB_API,
-            headers={
-                "Accept":     "application/vnd.github+json",
-                "User-Agent": f"CDN-Captain-Watchdog/{CURRENT_VERSION}",
-            },
-        )
+        headers = {
+            "Accept":     "application/vnd.github+json",
+            "User-Agent": f"CDN-Captain-Watchdog/{CURRENT_VERSION}",
+        }
+        token = _read_github_token()
+        if token:
+            headers["Authorization"] = f"token {token}"
+        req = urllib.request.Request(GITHUB_API, headers=headers)
         with urllib.request.urlopen(req, timeout=10) as resp:
             return json.loads(resp.read().decode())
     except Exception as exc:
