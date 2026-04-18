@@ -19,6 +19,7 @@ import base64
 import math
 import hmac
 import hashlib
+import random
 import aiosqlite
 from collections import defaultdict
 from dotenv import load_dotenv
@@ -99,7 +100,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 CDN_WEBSITE       = "https://cdndayz.com"
 BOT_NAME          = "CDN_Captain"
 
-CURRENT_VERSION   = "v1.2.3"
+CURRENT_VERSION   = "v1.2.4"
 GITHUB_RELEASES_API = "https://api.github.com/repos/InfamousMorningstar/CDN_Captain-bot/releases/latest"
 GITHUB_RELEASES_URL = "https://github.com/InfamousMorningstar/CDN_Captain-bot/releases/latest"
 PORTFOLIO_URL     = "https://portfolio.ahmxd.net"
@@ -176,20 +177,35 @@ ANSWER_DEDUP_TTL = 300
 DB_PATH      = "memory.db"
 _bot_start_time = time.time()
 
+_ADMIN_TAG_OPENER = "Hey there! 👋 Please don't ping the admins — they won't respond to direct tags and it clutters their notifications."
+
+_ADMIN_TAG_CLOSERS = [
+    "Thanks for keeping the server tidy! 😊",
+    "Appreciate you — the server runs smoother when we keep it organised! 🙌",
+    "Cheers for understanding! The admins appreciate it. ✌️",
+    "You're a legend for asking the right way. 🫡",
+    "Thanks for being a good sport about it! 😄",
+]
+
 def build_admin_tag_response(message: discord.Message) -> str:
     guild = message.guild
     rules_ch  = guild.get_channel(REFERENCE_CHANNEL_ID) if guild else None
     ticket_ch = guild.get_channel(TICKET_CHANNEL_ID)    if guild else None
     rules_mention  = f"<#{rules_ch.id}>"  if rules_ch  else "the rules channel"
     ticket_mention = f"<#{ticket_ch.id}>" if ticket_ch else "the ticket channel"
+    closer = random.choice(_ADMIN_TAG_CLOSERS)
+    footer = f"\n-# Engineered by [Morningstar.0](<{PORTFOLIO_URL}>)"
+    if _update_available:
+        footer += f"\n-# ⬆️ [Bot update available](<{GITHUB_RELEASES_URL}>)"
     return (
-        f"Hey! 👋 Please don't tag the admins directly — they're busy keeping things running.\n\n"
+        f"{_ADMIN_TAG_OPENER}\n\n"
         f"🌐 **Check the website first** — **https://cdndayz.com** has all the rules, FAQs, and info you need!\n"
         f"📋 **Server rules & info** are also in {rules_mention}\n"
         f"💬 **Still have a question?** Ask it here — a community member or I might be able to help!\n"
         f"🎫 **Need staff support?** Open a ticket in {ticket_mention}\n"
         f"🚫 **Please don't DM the admins either** — tickets are the best way to reach them.\n\n"
-        f"Thanks for keeping the server tidy! 😊"
+        f"{closer}"
+        f"{footer}"
     )
 
 NO_ANSWER = "NO_ANSWER"
