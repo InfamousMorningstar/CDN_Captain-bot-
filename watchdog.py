@@ -16,7 +16,7 @@ from datetime import datetime, timezone
 # ─────────────────────────────────────────────
 #  Version & update config
 # ─────────────────────────────────────────────
-CURRENT_VERSION     = "v1.2.1"
+CURRENT_VERSION     = "v1.2.2"
 GITHUB_API          = "https://api.github.com/repos/InfamousMorningstar/CDN_Captain-bot/releases/latest"
 RAW_BASE_TMPL       = "https://raw.githubusercontent.com/InfamousMorningstar/CDN_Captain-bot/{tag}"
 UPDATE_FILES        = ["bot.py", "watchdog.py", "requirements.txt"]
@@ -115,6 +115,23 @@ def check_and_apply_update() -> bool:
         try:
             with urllib.request.urlopen(url, timeout=30) as resp:
                 content = resp.read()
+
+            # Verify watchdog.py actually contains the expected version before
+            # applying it — guards against CDN serving a stale/cached file which
+            # would cause an infinite update-restart loop.
+            if fname == "watchdog.py":
+                content_str = content.decode("utf-8", errors="replace")
+                expected = f'CURRENT_VERSION     = "{latest_tag}"'
+                if expected not in content_str:
+                    log(f"   ⚠️  Downloaded watchdog.py does not contain {latest_tag} "
+                        f"(CDN may be stale) — aborting update to prevent loop")
+                    # Clean up temp if it exists
+                    if os.path.exists(tmp):
+                        try:
+                            os.remove(tmp)
+                        except OSError:
+                            pass
+                    return False
 
             # Write to a temp file first — never leave a half-written script
             with open(tmp, "wb") as f:
