@@ -1,0 +1,36 @@
+# Secrets — never commit these
+.env
+*.env
+.env.*
+
+# Bot runtime data
+memory.db
+watchdog.log
+*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+.venv/
+env/
+ENV/
+
+# PyInstaller build output
+build/
+dist/
+*.spec
+launcher_build.py
+
+# Compiled installer (share via GitHub Releases, not git)
+*.exe
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini
