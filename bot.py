@@ -21,6 +21,7 @@ import hmac
 import hashlib
 import random
 import aiosqlite
+import io
 from collections import defaultdict
 from dotenv import load_dotenv
 
@@ -100,7 +101,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 CDN_WEBSITE       = "https://cdndayz.com"
 BOT_NAME          = "CDN_Captain"
 
-CURRENT_VERSION   = "v1.2.4"
+CURRENT_VERSION   = "v1.2.5"
 GITHUB_RELEASES_API = "https://api.github.com/repos/InfamousMorningstar/CDN_Captain-bot/releases/latest"
 GITHUB_RELEASES_URL = "https://github.com/InfamousMorningstar/CDN_Captain-bot/releases/latest"
 PORTFOLIO_URL     = "https://portfolio.ahmxd.net"
@@ -164,9 +165,10 @@ TICKET_CHANNEL_ID           = 1340937937940119602
 REFERENCE_CHANNEL_MSG_LIMIT = 120
 REF_CHANNEL_CACHE_TTL       = 1800
 
-# Change detection — post website update alerts to this channel (set to None to disable)
-# Replace with your staff/log channel ID if you want change announcements
-CHANGE_ALERT_CHANNEL_ID: int | None = None
+# Change detection — post website update alerts to this channel.
+# Set CHANGE_ALERT_CHANNEL_ID in your .env file to enable (e.g. CHANGE_ALERT_CHANNEL_ID=1234567890).
+_caci_env = os.getenv("CHANGE_ALERT_CHANNEL_ID")
+CHANGE_ALERT_CHANNEL_ID: int | None = int(_caci_env) if _caci_env else None
 
 PROTECTED_ADMINS = {"5pntjoe", "strikezx"}
 
@@ -573,15 +575,22 @@ async def extract_structured_knowledge() -> None:
     if not _page_store:
         return
 
-    # Use the 6 largest pages as input — they tend to have the most rules/facts
-    top_pages = sorted(_page_store.items(), key=lambda x: len(x[1]), reverse=True)[:6]
-    combined  = "\n\n---\n\n".join(f"[{url}]\n{text}" for url, text in top_pages)
+    # Use ALL crawled pages — rules can appear on any page, not just the largest ones
+    all_pages = sorted(_page_store.items(), key=lambda x: len(x[1]), reverse=True)
+    combined  = "\n\n---\n\n".join(f"[{url}]\n{text}" for url, text in all_pages)
 
     prompt = f"""You are extracting structured facts from the CDNDayz DayZ server website.
-Read the content below and extract ALL concrete facts into a clean structured format.
+Read ALL of the content below and extract EVERY concrete fact into a clean structured format.
+
+CRITICAL RULES FOR EXTRACTION:
+- Do NOT skip any rule, even if it seems minor or redundant
+- Do NOT merge multiple rules into a single line — each rule gets its own line
+- Do NOT summarise groups of rules — list each one individually
+- Do NOT add commentary, explanations, or blank lines between facts
+- Every line must start with one of the tags below
 
 Include:
-- Server rules (exact wording where possible)
+- Server rules (exact wording)
 - Distances / exclusion zones (e.g. "No building within 1000m of traders")
 - Wipe schedule (exact days/times if present)
 - Error codes and their fixes
@@ -590,14 +599,14 @@ Include:
 - Any numbered or bulleted rules
 - Grace periods, penalties, ban policies
 
-Format as a clean list of facts, one per line, like:
+Format — one fact per line:
 RULE: No building within 1000 metres of any trader
 WIPE: Server wipes every Saturday at 6PM EST
 ERROR: 0x00040010 = BattlEye client not responding — fix: reinstall BattlEye
 DONATION: Tier 1 ($5) includes X, Y, Z
 SERVER_IP: 123.456.789.0:2302
 
-Only output facts. No explanations. No commentary.
+Only output facts. No explanations. No commentary. No blank lines.
 
 Website content:
 {combined}"""
@@ -605,10 +614,12 @@ Website content:
     try:
         resp = await anthropic_client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=2000,
+            max_tokens=4096,
+            temperature=0,
             messages=[{"role": "user", "content": prompt}],
         )
         _structured_knowledge = resp.content[0].text.strip()
+        await db_set_state("structured_knowledge", _structured_knowledge)
         _log(f"Facts ready  —  {len(_structured_knowledge.splitlines())} rules, schedules & server details extracted", "ok")
     except Exception as exc:
         _log(f"Could not extract facts from website:  {exc}", "warn")
@@ -664,9 +675,11 @@ Website content:
         resp = await anthropic_client.messages.create(
             model="claude-sonnet-4-6",
             max_tokens=500,
+            temperature=0,
             messages=[{"role": "user", "content": prompt}],
         )
         _wipe_info = resp.content[0].text.strip()
+        await db_set_state("wipe_info", _wipe_info)
         _log(f"Wipe schedule ready  —  {_wipe_info[:80]}{'...' if len(_wipe_info) > 80 else ''}", "ok")
     except Exception as exc:
         _log(f"Could not calculate wipe schedule:  {exc}", "warn")
@@ -1043,11 +1056,13 @@ async def evaluate_and_answer(
     reply_chain:        list[dict] | None = None,
     channel_name:       str = "unknown",
     prior_bot_answer:   dict | None = None,
+    force:              bool = False,
 ) -> str | None:
     """
     One Claude call that BOTH decides whether to respond AND generates the answer.
     Supports multiple screenshots, full reply chain context, and channel awareness.
     Returns the answer string, or None to stay silent.
+    force=True skips the confidence threshold (used by !cdn ask).
     """
     has_images  = bool(image_data_list)
     n_images    = len(image_data_list) if image_data_list else 0
@@ -1269,7 +1284,7 @@ If your confidence is below 6, treat it the same as {NO_ANSWER} — return {NO_A
     try:
         resp = await anthropic_client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=2000,
+            max_tokens=4096,
             system=system_prompt,
             messages=[{"role": "user", "content": content_blocks}],
         )
@@ -1288,7 +1303,7 @@ If your confidence is below 6, treat it the same as {NO_ANSWER} — return {NO_A
         if conf_match:
             confidence = int(conf_match.group(1))
             answer     = conf_match.group(2).strip()
-            if confidence < 6:
+            if confidence < 6 and not force:
                 _log(f"Not confident enough to answer ({confidence}/10)  —  \"{label}\"", "skip")
                 return None
             _log(f"Answering  (confidence {confidence}/10)  —  \"{label}\"", "ok")
@@ -1606,10 +1621,20 @@ async def on_ready():
         _log(f"Joined server:  {guild.name}", "info")
     _log("Setting up answer memory...", "info")
     await init_db()
-    global _bot_paused
+    global _bot_paused, _structured_knowledge, _wipe_info
     _bot_paused = await get_paused()
     if _bot_paused:
         _log("Starting in PAUSED mode  —  bot will not respond to the server", "warn")
+    # Restore last-known facts from DB so the bot can answer immediately
+    # while the fresh crawl runs — eliminates the ~90s blind window on restart
+    cached_sk = await db_get_state("structured_knowledge")
+    cached_wi = await db_get_state("wipe_info")
+    if cached_sk:
+        _structured_knowledge = cached_sk
+        _log(f"Cached knowledge loaded  —  {len(_structured_knowledge.splitlines())} facts from last run", "ok")
+    if cached_wi:
+        _wipe_info = cached_wi
+        _log("Cached wipe schedule loaded from last run", "ok")
     bot.loop.create_task(_auto_crawl_loop())
     bot.loop.create_task(_update_check_loop())
     _log("Loading website knowledge...", "info")
@@ -1910,6 +1935,7 @@ async def cdn_ask(ctx: commands.Context, *, question: str):
     answer = await evaluate_and_answer(
         ctx.message, rich_ctx, website_content, ref_content, False,
         channel_name=getattr(ctx.channel, "name", "unknown"),
+        force=True,
     )
     if answer is None:
         await ctx.reply(
@@ -1918,6 +1944,26 @@ async def cdn_ask(ctx: commands.Context, *, question: str):
         )
         return
     await ctx.reply(answer, mention_author=True)
+
+
+@bot.command(name="facts")
+@commands.check(_is_admin)
+async def cdn_facts(ctx: commands.Context):
+    """Dump the full structured knowledge base as a text file."""
+    if not _structured_knowledge:
+        await ctx.reply(
+            "No structured knowledge extracted yet. Try `!cdn crawl` first.",
+            mention_author=True,
+        )
+        return
+    lines = _structured_knowledge.splitlines()
+    header = f"CDN_Captain Structured Knowledge — {len(lines)} facts\n" + "─" * 50 + "\n\n"
+    buf = io.BytesIO((header + _structured_knowledge).encode("utf-8"))
+    await ctx.reply(
+        f"📋 **{len(lines)} facts** currently in the knowledge base:",
+        file=discord.File(buf, filename="cdn_facts.txt"),
+        mention_author=True,
+    )
 
 
 @bot.command(name="crawl")
