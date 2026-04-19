@@ -101,7 +101,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 CDN_WEBSITE       = "https://cdndayz.com"
 BOT_NAME          = "CDN_Captain"
 
-CURRENT_VERSION   = "v1.2.5"
+CURRENT_VERSION   = "v1.2.6"
 GITHUB_RELEASES_API = "https://api.github.com/repos/InfamousMorningstar/CDN_Captain-bot/releases/latest"
 GITHUB_RELEASES_URL = "https://github.com/InfamousMorningstar/CDN_Captain-bot/releases/latest"
 PORTFOLIO_URL     = "https://portfolio.ahmxd.net"
@@ -165,10 +165,9 @@ TICKET_CHANNEL_ID           = 1340937937940119602
 REFERENCE_CHANNEL_MSG_LIMIT = 120
 REF_CHANNEL_CACHE_TTL       = 1800
 
-# Change detection — post website update alerts to this channel.
-# Set CHANGE_ALERT_CHANNEL_ID in your .env file to enable (e.g. CHANGE_ALERT_CHANNEL_ID=1234567890).
-_caci_env = os.getenv("CHANGE_ALERT_CHANNEL_ID")
-CHANGE_ALERT_CHANNEL_ID: int | None = int(_caci_env) if _caci_env else None
+# Change detection — post website update alerts to this channel (set to None to disable)
+# Replace with your staff/log channel ID if you want change announcements
+CHANGE_ALERT_CHANNEL_ID: int | None = None
 
 PROTECTED_ADMINS = {"5pntjoe", "strikezx"}
 
