@@ -101,7 +101,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 CDN_WEBSITE       = "https://www.cdndayz.com"
 BOT_NAME          = "CDN_Captain"
 
-CURRENT_VERSION   = "v1.2.9"
+CURRENT_VERSION   = "v1.3.0"
 GITHUB_RELEASES_API = "https://api.github.com/repos/InfamousMorningstar/CDN_Captain-bot/releases/latest"
 GITHUB_RELEASES_URL = "https://github.com/InfamousMorningstar/CDN_Captain-bot/releases/latest"
 PORTFOLIO_URL     = "https://portfolio.ahmxd.net"
@@ -141,7 +141,8 @@ RESUME_PHRASES  = {"resume", "come back", "start responding", "wake up", "unpaus
 # these related terms, so Claude gets the right content even if phrasing differs
 KEYWORD_EXPANSIONS: dict[str, set[str]] = {
     "donate":    {"donation", "donator", "support", "patreon", "contribute", "tier"},
-    "trader":    {"market", "shop", "vendor", "trade", "safe zone", "trader zone", "exclusion"},
+    "trader":    {"market", "shop", "vendor", "trade", "safe zone", "trader zone", "exclusion",
+                  "vehicle trader", "aircraft trader", "special trader", "black market", "blackmarket"},
     "wipe":      {"reset", "restart", "wipe schedule", "server reset", "next wipe", "map reset"},
     "base":      {"build", "territory", "flag", "construction", "building", "base building"},
     "ban":       {"banned", "suspend", "appeal", "blacklist", "unban"},
@@ -157,6 +158,13 @@ KEYWORD_EXPANSIONS: dict[str, set[str]] = {
     "ip":        {"server ip", "address", "connect", "direct connect"},
     "distance":  {"metres", "meters", "radius", "boundary", "zone", "away", "far"},
     "build":     {"territory", "base", "construction", "flag", "build zone"},
+    "rep":       {"reputation", "rep progression", "unlock", "points", "earn rep"},
+    "dungeon":   {"permadeath", "permanent death", "dungeon run", "admin teleport", "dungeon rules"},
+    "scifi":     {"sci-fi", "sci fi", "banov", "yrtsk", "parkour", "blackmarket", "hidden trader",
+                  "special trader", "rainbow bear", "rep progression"},
+    "yrtsk":     {"weapon tier", "tier 1", "tier 2", "tier 3", "tier 4", "tier 5", "sci-fi weapon"},
+    "weapon":    {"yrtsk", "tier", "blackmarket", "t1", "t2", "t3", "t4", "t5"},
+    "hardcore":  {"hc", "hc server", "territory", "raiding", "permadeath", "donation items"},
 }
 
 REFERENCE_CHANNEL_ID        = 1340937408434405437
@@ -617,9 +625,10 @@ CRITICAL RULES FOR EXTRACTION:
 - Do NOT summarise groups of rules — list each one individually
 - Do NOT add commentary, explanations, or blank lines between facts
 - Every line must start with one of the tags below
+- Capture ALL server-specific details including Sci-fi/Banov content, dungeon rules, trader rep, weapon tiers
 
 Include:
-- Server rules (exact wording)
+- Server rules (exact wording, ALL tabs — General, Base Building, Sci-fi Server)
 - Distances / exclusion zones (e.g. "No building within 1000m of traders")
 - Wipe schedule (exact days/times if present)
 - Error codes and their fixes
@@ -627,13 +636,22 @@ Include:
 - Server IPs / connection info
 - Any numbered or bulleted rules
 - Grace periods, penalties, ban policies
+- Sci-fi Banov server details: Yrtsk weapon tiers, rep requirements, dungeon rules, hidden blackmarket, special trader
+- Trader rep thresholds and how rep is earned
+- Dungeon rules (permadeath, admin teleport, entry/exit requirements)
 
-Format — one fact per line:
+Format — one fact per line, using the tag that best fits:
 RULE: No building within 1000 metres of any trader
 WIPE: Server wipes every Saturday at 6PM EST
 ERROR: 0x00040010 = BattlEye client not responding — fix: reinstall BattlEye
 DONATION: Tier 1 ($5) includes X, Y, Z
 SERVER_IP: 123.456.789.0:2302
+SCIFI: Yrtsk Tier 1 weapons (Trader T1-3): Armadilo, Boar, Claw, Grizzly, Hedgehog, Puma, Wolverine
+SCIFI: Yrtsk Tier 4 weapons (Blackmarket T4-5): A White Whisper, All of Existence, Bars, Corw, Eagle, Fang, Glimpses, Glossy Chip, Ignorance, Sin, Slasher, Sunrise
+REP: Vehicle Trader unlocks at 10,000 rep
+REP: Zombie kill = +10 rep on Sci-fi Banov
+DUNGEON: Die inside the dungeon = permanent death, no respawns, no revives
+TRADER: Special Trader is an elusive merchant found in the wilds
 
 Only output facts. No explanations. No commentary. No blank lines.
 
@@ -643,7 +661,7 @@ Website content:
     try:
         resp = await anthropic_client.messages.create(
             model="claude-sonnet-4-6",
-            max_tokens=4096,
+            max_tokens=8192,
             temperature=0,
             messages=[{"role": "user", "content": prompt}],
         )
