@@ -101,7 +101,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 CDN_WEBSITE       = "https://www.cdndayz.com"
 BOT_NAME          = "CDN_Captain"
 
-CURRENT_VERSION   = "v1.3.1"
+CURRENT_VERSION   = "v1.3.2"
 GITHUB_RELEASES_API = "https://api.github.com/repos/InfamousMorningstar/CDN_Captain-bot/releases/latest"
 GITHUB_RELEASES_URL = "https://github.com/InfamousMorningstar/CDN_Captain-bot/releases/latest"
 PORTFOLIO_URL     = "https://portfolio.ahmxd.net"
@@ -609,41 +609,86 @@ _EXTRACTION_PROMPT = """\
 You are extracting structured facts from the CDNDayz DayZ server website.
 Read ALL of the content below and extract EVERY concrete fact.
 
-CRITICAL RULES — follow these exactly:
-- Extract EVERY fact, rule, number, policy, distance, and server-specific detail — miss nothing
+CRITICAL RULES — follow these exactly, no exceptions:
+- Extract EVERY fact, rule, number, policy, distance, cause, fix, and server-specific detail — miss nothing
+- MAXIMUM GRANULARITY: each individual cause, fix, step, or sub-detail gets its own separate output line
+  — do NOT bundle multiple causes onto one line, do NOT bundle multiple fixes onto one line
+  — if something has 5 causes, write 5 lines; if something has 7 fixes, write 7 lines
 - Do NOT skip content even if it seems minor, repeated, or unfamiliar
-- Do NOT merge multiple facts into one line — each fact gets its own line
-- Do NOT summarise groups of items — list every one individually
+- Do NOT summarise — reproduce the actual content, not a paraphrase
 - Do NOT add commentary, blank lines, or explanations
 - Every output line MUST start with a TAG: prefix
 - Use the existing tags listed below when they fit
-- If content does not fit any existing tag, INVENT a short ALL-CAPS tag (e.g. VEHICLE, MAP, ZONE, LOOT, EVENT)
+- If content does not fit any existing tag, INVENT a short ALL-CAPS tag that describes it
   — never omit content just because you lack a tag for it
-- Future website additions (new pages, new sections, new features) must be fully captured the same way
+- Apply this same approach to any new page or section added to the website in future
 
 Existing tags — use these when they apply:
-  RULE       — any server or community rule
-  WIPE       — wipe schedule, dates, reset policy
-  ERROR      — error codes and their fixes
-  DONATION   — store items, payment, perks, rollover policy
-  SERVER_IP  — server addresses and server names
-  SCIFI      — Sci-fi Banov server (Yrtsk weapons, rep, dungeon, blackmarket, special trader)
-  REP        — reputation thresholds and how rep is earned
-  DUNGEON    — dungeon entry/exit rules, permadeath, admin teleport policy
+  RULE       — any server or community rule (one rule per line)
+  WIPE       — wipe schedule, dates, reset policy, rollover details
+  ERROR      — error codes: one line per code description, one line per cause, one line per fix
+  DONATION   — store items, payment methods, perks, rollover policy, restrictions
+  SERVER_IP  — server IP addresses, names, maps, slot counts
+  SCIFI      — Sci-fi Banov server details (Yrtsk weapons, rep, dungeon, blackmarket, special trader)
+  REP        — reputation thresholds and how rep is earned (one threshold per line)
+  DUNGEON    — dungeon rules (one rule per line: permadeath, admin teleport, entry, exit, announcements)
   TRADER     — trader info, locations, unlock conditions
-  BASE       — base building rules, distances, territory rules
-  EVENT      — community events and schedules
-  FAQ        — question and answer pairs
-  JOIN       — connection guide, how to join
+  BASE       — base building rules, distances, territory rules, building systems per server
+  EVENT      — community events, schedules, announcements
+  FAQ        — Q&A pairs (one pair per line: FAQ: Q: question A: answer)
+  JOIN       — how to join, launcher steps (one step per line)
+  MOD        — mod counts, mod names, per-server mod details
+  POPULATION — live player counts, peak times, server reliability, busiest hours
+  NETWORK    — network infrastructure, data sources, query methods
+  PRIVACY    — privacy policy details
+  TERMS      — terms of service details
+  LOOT       — loot zones, loot quality, economy
+  ZONE       — safe zones, map zones, zone rules
 
-Format — one fact per line, no blank lines, no commentary:
+Granularity examples — this is the REQUIRED level of detail:
 RULE: No building within 1000 metres of any trader
-WIPE: Server wipes approximately every 3 months (~90 days)
-ERROR: 0x00040010 = kicked by admin — fix: wait for restart then reconnect
-SCIFI: Yrtsk Tier 1 weapons available at Trader: Armadilo, Boar, Claw, Grizzly, Hedgehog, Puma, Wolverine
+RULE: Toxicity is not welcome on the CDN servers
+WIPE: All CDN servers wipe approximately every 3 months (~90 days)
+WIPE: Last wipe occurred on April 3, 2026
+WIPE: A wipe clears all player bases
+WIPE: A wipe clears all vehicles
+WIPE: A wipe clears all stashed loot
+WIPE: A wipe clears all character data
+ERROR: 0x00040010 = ADMIN_KICK — player was removed by a server administrator or admin system
+ERROR: 0x00040010 common cause = manual admin kick
+ERROR: 0x00040010 common cause = rule enforcement
+ERROR: 0x00040010 common cause = automated pre-restart player kick routine
+ERROR: 0x00040010 fix = if a restart was announced, wait and reconnect after the server is back up
+ERROR: 0x00040010 fix = contact the server admin if needed
+ERROR: 0x00040010 fix = review server rules
+ERROR: 0x00040093 fix = fully close DayZ and Steam, then reopen Steam and wait for Workshop updates
+ERROR: 0x00040093 fix = clear the Steam download cache via Steam menu > Settings > Downloads > Clear Download Cache
+ERROR: 0x00040093 fix = unsubscribe from the mod then resubscribe to force a clean re-download
+SCIFI: Yrtsk Tier 1 weapons (available at Trader T1-3): Armadilo, Boar, Claw, Grizzly, Hedgehog, Puma, Wolverine
+SCIFI: Yrtsk Tier 4 weapons (Blackmarket T4-5 only): A White Whisper, All of Existence, Bars, Corw, Eagle, Fang
 REP: Vehicle Trader unlocks at 10,000 rep
+REP: Aircraft Trader unlocks at 20,000 rep
+REP: Special Trader unlocks at 25,500 rep
+REP: Black Market unlocks at 50,000 rep
+REP: Zombie kill = +10 rep on Sci-fi Banov
+REP: Rainbow Bear kill = +100 rep on Sci-fi Banov
+DUNGEON: Die inside the dungeon = permanent death, no respawns, no revives
+DUNGEON: Mates may loot your gear after you die inside the dungeon
+DUNGEON: Admin Teleport Both Ways — players cannot enter or exit on their own
+DUNGEON: An admin must teleport you in and out of the dungeon
 DUNGEON: Entering without an admin present = permanent ban
-FAQ: Q: Is PvP allowed? A: Not on standard PvE servers; HC servers allow territory PvP and raiding
+DUNGEON: Start = announce "Starting dungeon run" in chat before entering
+DUNGEON: Finish = announce "Dungeon completed [Name]" in chat on completion
+FAQ: Q: Is PvP allowed? A: Not on standard servers. HC servers allow territory PvP and raiding
+FAQ: Q: How do I take down a BLR house? A: Claim the house, make sure it is completely empty, equip a hammer, stand outside facing the door, look at it, and select the Fold option
+MOD: #1 SciFi Modded CDN Banov PVE — 44 mods — includes AgricultureCore, CBD Sci-Fi power generator, Code Lock, AJs Creatures V2
+POPULATION: CDN Banov SciFi peak = 7 players on Sun 19 Apr at 14:06
+POPULATION: CDN Banov SciFi busiest time = 8pm
+JOIN: Step 1 = purchase DayZ on Steam
+JOIN: Step 2 = download DZSA Launcher for easy mod management and server discovery
+JOIN: Step 3 = search for CDN in the launcher filter to see the full list of modded PvE servers
+PRIVACY: The site does not use invasive tracking pixels or advertising cookies
+TERMS: In-game issues, bans, or disputes should be directed to the CDN DayZ moderation team via Discord
 
 Only output facts. No explanations. No blank lines. No headers. No markdown.
 
