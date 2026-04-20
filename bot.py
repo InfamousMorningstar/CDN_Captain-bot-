@@ -101,7 +101,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 CDN_WEBSITE       = "https://www.cdndayz.com"
 BOT_NAME          = "CDN_Captain"
 
-CURRENT_VERSION   = "v1.3.2"
+CURRENT_VERSION   = "v1.3.3"
 GITHUB_RELEASES_API = "https://api.github.com/repos/InfamousMorningstar/CDN_Captain-bot/releases/latest"
 GITHUB_RELEASES_URL = "https://github.com/InfamousMorningstar/CDN_Captain-bot/releases/latest"
 PORTFOLIO_URL     = "https://portfolio.ahmxd.net"
@@ -516,21 +516,50 @@ async def _fetch_page_js(browser: Browser, url: str) -> tuple[str, str, str]:
 
         text_parts: list[str] = [_extract_text(html)]
 
-        # Walk through any tab buttons so hidden/unmounted panels are captured
-        for selector in ('[role="tab"]', '[data-tab]', '.tab-btn', '.tab-button'):
-            tabs = await page.query_selector_all(selector)
-            if len(tabs) > 1:
-                _log(f"{len(tabs)} tabs found  —  reading all panels: …/{url.split('/')[-1] or 'home'}", "crawl")
-                for tab in tabs[1:]:  # tab[0] content already captured above
+        # --- Tab detection strategy ---
+        # The site uses plain <button> elements styled with Tailwind — none of the
+        # standard ARIA selectors ([role="tab"], [data-tab], .tab-btn etc.) match.
+        # Strategy: find ALL buttons, identify clusters of 2-6 that sit inside the
+        # same immediate parent container (i.e. a tab bar), then click each one.
+        tab_buttons = await page.evaluate("""() => {
+            const buttons = Array.from(document.querySelectorAll('button'));
+            // Group by direct parent element
+            const groups = new Map();
+            for (const btn of buttons) {
+                const parent = btn.parentElement;
+                if (!parent) continue;
+                const key = parent;
+                if (!groups.has(key)) groups.set(key, []);
+                groups.get(key).push(btn);
+            }
+            // A tab bar has 2-6 sibling buttons with non-empty text
+            const tabGroups = [];
+            for (const [parent, btns] of groups) {
+                const textBtns = btns.filter(b => b.innerText.trim().length > 0);
+                if (textBtns.length >= 2 && textBtns.length <= 6) {
+                    tabGroups.push(textBtns.map(b => b.innerText.trim()));
+                }
+            }
+            return tabGroups;
+        }""")
+
+        if tab_buttons:
+            for group in tab_buttons:
+                if len(group) < 2:
+                    continue
+                _log(f"{len(group)} tab buttons found ({', '.join(group)})  —  {url.split('/')[-1] or 'home'}", "crawl")
+                # Click tabs after the first (first is already captured in base html)
+                for btn_text in group[1:]:
                     try:
-                        await tab.click()
-                        await page.wait_for_timeout(700)
+                        # Use Playwright's text locator — most reliable for Tailwind buttons
+                        btn = page.get_by_role("button", name=btn_text, exact=True)
+                        await btn.click()
+                        await page.wait_for_timeout(900)
                         tab_text = _extract_text(await page.content())
                         if tab_text and tab_text not in text_parts:
                             text_parts.append(tab_text)
                     except Exception:
                         pass
-                break  # found a working selector, stop trying others
 
         all_text = "\n\n--- (tab) ---\n\n".join(text_parts)
         return url, html, all_text
