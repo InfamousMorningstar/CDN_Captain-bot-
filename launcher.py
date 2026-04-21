@@ -490,10 +490,13 @@ class InstallerApp:
         self._status("Launching bot...")
         self._kill_existing(install_dir)
         watchdog = os.path.join(install_dir, "watchdog.py")
-        # Launch cmd.exe directly (not via shell=True) so we get the real PID of the
-        # console window — saved to launcher.pid for cleanup on next launch
+        # Pass a raw string (not a list) so Popen hands it verbatim to CreateProcess.
+        # Using a list causes list2cmdline to backslash-escape the inner quotes (→ \")
+        # which cmd.exe misparses, making the quoted python path unrecognised.
+        # The double-quote wrapping trick ""path" "arg"" is the correct cmd.exe convention.
+        cmd_str = f'cmd /k ""{python}" "{watchdog}""'
         proc = subprocess.Popen(
-            ["cmd", "/k", f'title CDN_Captain && "{python}" "{watchdog}"'],
+            cmd_str,
             cwd=install_dir,
             creationflags=0x00000010,  # CREATE_NEW_CONSOLE
         )
