@@ -433,8 +433,28 @@ class InstallerApp:
             self._log("✅ Chromium ready")
 
     def _kill_existing(self, install_dir: str) -> None:
-        """Kill any running CDN_Captain instance — by PID file and by window title."""
-        # 1. Kill via watchdog.pid if present
+        """Kill any running CDN_Captain instance — by stored cmd PID, then by watchdog PID."""
+        # 1. Kill the cmd.exe console window by the PID we saved on last launch.
+        #    This is the most reliable method — window-title matching does not work
+        #    on Windows because taskkill sees all cmd titles as N/A.
+        launcher_pid_file = os.path.join(install_dir, "launcher.pid")
+        if os.path.exists(launcher_pid_file):
+            try:
+                with open(launcher_pid_file, "r") as f:
+                    pid = int(f.read().strip())
+                subprocess.run(
+                    ["taskkill", "/PID", str(pid), "/T", "/F"],
+                    capture_output=True,
+                )
+                self._log(f"⏹  Closed existing window (PID {pid})")
+            except Exception:
+                pass
+            try:
+                os.remove(launcher_pid_file)
+            except OSError:
+                pass
+
+        # 2. Also kill via watchdog.pid (Python process) as a fallback
         pid_file = os.path.join(install_dir, "watchdog.pid")
         if os.path.exists(pid_file):
             try:
@@ -452,12 +472,7 @@ class InstallerApp:
             except OSError:
                 pass
 
-        # 2. Also kill by window title — catches cases where PID file is stale or missing
-        subprocess.run(
-            ["taskkill", "/FI", "WINDOWTITLE eq CDN_Captain", "/T", "/F"],
-            capture_output=True,
-        )
-        # Kill any orphaned python processes running watchdog.py from install_dir
+        # 3. Wmic fallback — catches any orphaned python processes from this install dir
         subprocess.run(
             ["wmic", "process", "where",
              f'CommandLine like "%{install_dir}%watchdog.py%"',
@@ -470,10 +485,19 @@ class InstallerApp:
         self._status("Launching bot...")
         self._kill_existing(install_dir)
         watchdog = os.path.join(install_dir, "watchdog.py")
-        subprocess.Popen(
-            f'start "CDN_Captain" cmd /k ""{python}" "{watchdog}""',
-            shell=True, cwd=install_dir,
+        # Launch cmd.exe directly (not via shell=True) so we get the real PID of the
+        # console window — saved to launcher.pid for cleanup on next launch
+        proc = subprocess.Popen(
+            ["cmd", "/k", f'title CDN_Captain && "{python}" "{watchdog}"'],
+            cwd=install_dir,
+            creationflags=0x00000010,  # CREATE_NEW_CONSOLE
         )
+        try:
+            launcher_pid_path = os.path.join(install_dir, "launcher.pid")
+            with open(launcher_pid_path, "w") as f:
+                f.write(str(proc.pid))
+        except OSError:
+            pass
         self._log("🚀 CDN_Captain is running!")
 
     # ── Completion ─────────────────────────────────────────────────────────────
