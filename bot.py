@@ -101,7 +101,7 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
 CDN_WEBSITE       = "https://www.cdndayz.com"
 BOT_NAME          = "CDN_Captain"
 
-CURRENT_VERSION   = "v1.4.1"
+CURRENT_VERSION   = "v1.5.0"
 GITHUB_RELEASES_API = "https://api.github.com/repos/InfamousMorningstar/CDN_Captain-bot/releases/latest"
 GITHUB_RELEASES_URL = "https://github.com/InfamousMorningstar/CDN_Captain-bot/releases/latest"
 PORTFOLIO_URL     = "https://portfolio.ahmxd.net"
@@ -110,13 +110,13 @@ PORTFOLIO_URL     = "https://portfolio.ahmxd.net"
 _update_available: bool = False
 
 USER_COOLDOWN_SECONDS       = 30
-CONTEXT_MESSAGE_LIMIT       = 75
+CONTEXT_MESSAGE_LIMIT       = 20
 MAX_PAGES_TO_CRAWL          = 200
 CRAWL_CONCURRENCY           = 4
 CRAWL_CACHE_TTL             = 3600
-AUTO_CRAWL_INTERVAL         = 3600
-TOP_PAGES_FOR_ANSWER        = 12    # more sources fed to Claude
-CHARS_PER_PAGE              = 10000 # more content per page
+AUTO_CRAWL_INTERVAL         = 86400  # once per day
+TOP_PAGES_FOR_ANSWER        = 6     # more sources fed to Claude
+CHARS_PER_PAGE              = 5000  # more content per page
 MAX_MESSAGE_AGE_SECONDS     = 90
 TWO_PERSON_CONVO_WINDOW     = 10
 
@@ -247,10 +247,12 @@ _BM_PHRASE_PATTERNS: list[str] = [
     r"\bblack\s*market\s+(is\s+)?(hidden|secret|unlocked|accessible)\b",
     # coords for the blackmarket
     r"\bcoords?\s+(for|of|to)\s+(the\s+)?black\s*market\b",
-    # bm (abbreviation) + proximity/direction word
-    r"\b(bm)\s+(is\s+|was\s+)?(at|near|around|located|found|behind|inside|"
+    # bm (abbreviation) + proximity/direction word (allows intervening words e.g. "BM on Scifi Banov is near")
+    r"\b(bm)\b.{0,40}?(at|near|around|located|found|behind|inside|"
     r"next\s+to|close\s+to|by|past|opposite|between|before|after|in\s+front\s+of|"
     r"south|north|east|west)\b",
+    # bm (abbreviation) + area/zone/sector reference  (e.g. "BM on Scifi Banov is near Area 01")
+    r"\b(bm)\b.{0,60}\b(area\s*\d+|zone\s*\d*|sector\s*\d*|grid\s*\d+)\b",
     # where is the blackmarket
     r"\bwhere\s+(is|are)\s+(the\s+)?black\s*market\b",
 ]
@@ -1410,6 +1412,10 @@ async def _bm_handle_violation(message: discord.Message, reason: str) -> None:
 
     # 1. Delete the offending message
     deleted = False
+    # Diagnostic: log the bot's effective permissions in this channel
+    if message.guild:
+        bot_perms = message.channel.permissions_for(message.guild.me)
+        _log(f"BM guard — bot perms in #{chan}: manage_messages={bot_perms.manage_messages}  administrator={bot_perms.administrator}", "info")
     try:
         await message.delete()
         deleted = True
